@@ -1,0 +1,62 @@
+#! /usr/bin/env hoomd
+
+from hoomd_script import *
+import math
+
+# parameters
+phi_P = 0.20
+n_poly = 1
+T = 1.2
+#polymer1 = dict(bond_len=1.2, type=['A']*10 + ['B']*7 + ['A']*10, bond="linear", count=n_poly)
+polymer1 = dict(bond_len=1.2, type=['A']*100, bond="linear", count=1)
+
+
+
+# perform some simple math to find the length of the box
+N = len(polymer1['type']) * polymer1['count'];
+N=50
+L = math.pow(math.pi * N / (6.0 * phi_P), 1.0/3.0);
+L=50
+# generate the polymer system
+init.create_random_polymers(box=hoomd.BoxDim(L), polymers=[polymer1], separation=dict(A=0.35));
+
+# force field setup
+epsilon = 1.0
+sigma = 1.0
+
+
+### FENE
+fene = bond.fene()
+k_fene = 30*epsilon/(sigma*sigma)
+r_fene = 1.5*sigma
+
+fene.set_coeff('polymer', k=k_fene, r0=r_fene, sigma=sigma, epsilon=epsilon)
+
+
+### LENNARD_JONES
+r_cut= math.pow(2.0,(1/6))*sigma
+lj = pair.lj(r_cut=r_cut)
+lj.pair_coeff.set('A', 'A', epsilon=epsilon, sigma=sigma, alpha=1.0)
+
+
+# NVT integration
+all = group.all()
+integrate.mode_standard(dt=0.005)
+integrate.nvt(group=all, T=T, tau=0.5)
+
+# dump an xmle file for the structure information
+xml = dump.xml(filename='test_poly.xml', vis=True)
+
+# warm up the system
+run(4000)
+
+nlist.set_params(r_buff=0.4, check_period=5)
+# these paramters ^^^         ^^^            are determined automatically by running with the next line uncommented
+#tune.r_buff(set_max_check_period=True)
+
+
+# dump a .dcd file for the trajectory
+dump.dcd(filename='test_poly.dcd', period=100)
+run(10e3)
+
+raw_input("Benchmark complete: press enter to exit");
